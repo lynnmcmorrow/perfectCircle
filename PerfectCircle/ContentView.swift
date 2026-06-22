@@ -1,61 +1,53 @@
-//
-//  ContentView.swift
-//  PerfectCircle
-//
-//  Created by Lynn McMorrow on 6/22/26.
-//
-
 import SwiftUI
-import SwiftData
 
 struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
+    @State private var viewModel = GameViewModel()
 
     var body: some View {
-        NavigationSplitView {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                StatsBarView(stats: viewModel.stats)
+
+                ZStack {
+                    DrawingCanvasView(
+                        points: viewModel.path.points,
+                        onChanged: { viewModel.onDragChanged($0) },
+                        onEnded: { viewModel.onDragEnded() }
+                    )
+
+                    if case .idle = viewModel.state {
+                        InstructionView()
+                            .transition(.opacity)
+                    }
+
+                    if case .scored(let score) = viewModel.state {
+                        let delta = Int(((score - 0.5) * 200).rounded())
+                        ScoreDisplayView(
+                            score: score,
+                            pointDelta: delta,
+                            onReset: { viewModel.reset() }
+                        )
+                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
                     }
                 }
-                .onDelete(perform: deleteItems)
+                .animation(.easeInOut(duration: 0.3), value: stateKey)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
-                    }
-                }
-            }
-        } detail: {
-            Text("Select an item")
         }
+        .preferredColorScheme(.dark)
     }
 
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
-        }
-    }
-
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(items[index])
-            }
+    private var stateKey: String {
+        switch viewModel.state {
+        case .idle:    return "idle"
+        case .drawing: return "drawing"
+        case .scored:  return "scored"
         }
     }
 }
 
 #Preview {
     ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
 }
